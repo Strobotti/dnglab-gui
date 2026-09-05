@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"context"
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -8,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"github.com/strobotti/dnglab-gui/internal/config"
 	"github.com/strobotti/dnglab-gui/internal/converter"
 )
 
@@ -16,7 +20,20 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	w := a.NewWindow("DNGLab GUI")
 	w.Resize(fyne.NewSize(640, 560))
 
+	// Load persisted settings.
+	settings := config.Load(a.Preferences())
+
 	opts := converter.DefaultConvertOptions()
+	// Apply saved settings to opts.
+	opts.Compression = settings.Compression
+	opts.Crop = settings.Crop
+	opts.EmbedRaw = settings.EmbedRaw
+	opts.Preview = settings.Preview
+	opts.Thumbnail = settings.Thumbnail
+	opts.SkipExisting = settings.SkipExisting
+	opts.Artist = settings.Artist
+	opts.InputPath = settings.LastInputDir
+	opts.OutputPath = settings.LastOutputDir
 
 	// ── Section 1: Select images to convert ─────────────────────────────────
 
@@ -26,13 +43,57 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		fyne.TextStyle{Bold: true},
 	)
 
-	inputPathLabel := widget.NewLabel("No images have been selected")
+	inputPathText := settings.LastInputDir
+	if inputPathText == "" {
+		inputPathText = "No images have been selected"
+	}
+	inputPathLabel := widget.NewLabel(inputPathText)
 
 	// Convert button declared early so the folder selector can enable it.
-	convertBtn := widget.NewButton("Convert", func() {
-		dialog.ShowInformation("Convert", "Conversion will be implemented in the next step", w)
+	var convertBtn *widget.Button
+	convertBtn = widget.NewButton("Convert", func() {
+		// 1. Detect dnglab binary.
+		dl := converter.DNGLab{}
+		if err := dl.DetectBinary(); err != nil {
+			dialog.ShowError(fmt.Errorf("dnglab not found: %v\n\nPlease install dnglab and ensure it is on your PATH", err), w)
+			return
+		}
+
+		// 2. Scan for RAW files.
+		files, err := converter.ScanForRawFiles(opts.InputPath, opts.Recursive)
+		if err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+		if len(files) == 0 {
+			dialog.ShowInformation("No files found", "No supported RAW files were found in the selected folder.", w)
+			return
+		}
+
+		// 3. Show progress dialog.
+		ctx, cancel := context.WithCancel(context.Background())
+		pd := NewProgressDialog(a, w)
+		pd.SetCancelFunc(cancel)
+		pd.Show()
+
+		// 4. Disable Convert button during conversion.
+		convertBtn.Disable()
+
+		// 5. Run conversion in a goroutine.
+		go func() {
+			convErr := dl.Convert(ctx, opts, func(file string, current, total int) {
+				pd.Update(file, current, total, fmt.Sprintf("[%d/%d] %s", current, total, filepath.Base(file)))
+			})
+			cancel()
+			pd.Complete(convErr)
+			convertBtn.Enable()
+		}()
 	})
-	convertBtn.Disable()
+	if opts.InputPath != "" {
+		convertBtn.Enable()
+	} else {
+		convertBtn.Disable()
+	}
 
 	selectInputBtn := widget.NewButton("Select Folder...", func() {
 		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
@@ -40,6 +101,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 				return
 			}
 			opts.InputPath = uri.Path()
+			settings.LastInputDir = uri.Path()
 			inputPathLabel.SetText(uri.Path())
 			convertBtn.Enable()
 		}, w)
@@ -48,11 +110,12 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	recursiveCheck := widget.NewCheck("Include images in subfolders", func(checked bool) {
 		opts.Recursive = checked
 	})
+	recursiveCheck.SetChecked(opts.Recursive)
 
 	skipCheck := widget.NewCheck("Skip source image if destination image already exists", func(checked bool) {
 		opts.SkipExisting = checked
 	})
-	skipCheck.SetChecked(true) // matches DefaultConvertOptions
+	skipCheck.SetChecked(opts.SkipExisting)
 
 	section1 := container.NewVBox(
 		sec1Label,
@@ -70,7 +133,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		fyne.TextStyle{Bold: true},
 	)
 
-	outputPathLabel := widget.NewLabel("")
+	outputPathLabel := widget.NewLabel(opts.OutputPath)
 
 	outputFolderBtn := widget.NewButton("Select Folder...", func() {
 		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
@@ -78,10 +141,19 @@ func NewMainWindow(a fyne.App) fyne.Window {
 				return
 			}
 			opts.OutputPath = uri.Path()
+			settings.LastOutputDir = uri.Path()
 			outputPathLabel.SetText(uri.Path())
 		}, w)
 	})
-	outputFolderBtn.Disable()
+
+	// Determine initial state of the output folder button.
+	initialLocationSelection := "Save in Same Location"
+	if settings.OutputMode == "folder" {
+		initialLocationSelection = "Select Folder..."
+		outputFolderBtn.Enable()
+	} else {
+		outputFolderBtn.Disable()
+	}
 
 	locationSelect := widget.NewSelect(
 		[]string{"Save in Same Location", "Select Folder..."},
@@ -91,12 +163,14 @@ func NewMainWindow(a fyne.App) fyne.Window {
 				opts.OutputPath = ""
 				outputPathLabel.SetText("")
 				outputFolderBtn.Disable()
+				settings.OutputMode = "same"
 			case "Select Folder...":
 				outputFolderBtn.Enable()
+				settings.OutputMode = "folder"
 			}
 		},
 	)
-	locationSelect.SetSelected("Save in Same Location")
+	locationSelect.SetSelected(initialLocationSelection)
 
 	section2 := container.NewVBox(
 		sec2Label,
@@ -115,8 +189,15 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	compressionRadio := widget.NewRadioGroup([]string{"Lossless", "Uncompressed"}, func(s string) {
 		opts.Compression = strings.ToLower(s)
+		settings.Compression = opts.Compression
 	})
-	compressionRadio.SetSelected("Lossless")
+	// Restore saved compression selection.
+	switch opts.Compression {
+	case "uncompressed":
+		compressionRadio.SetSelected("Uncompressed")
+	default:
+		compressionRadio.SetSelected("Lossless")
+	}
 
 	cropMap := map[string]string{
 		"Best":        "best",
@@ -126,24 +207,36 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	cropRadio := widget.NewRadioGroup([]string{"Best", "Active Area", "None"}, func(s string) {
 		if v, ok := cropMap[s]; ok {
 			opts.Crop = v
+			settings.Crop = v
 		}
 	})
-	cropRadio.SetSelected("Best")
+	// Restore saved crop selection.
+	switch opts.Crop {
+	case "activearea":
+		cropRadio.SetSelected("Active Area")
+	case "none":
+		cropRadio.SetSelected("None")
+	default:
+		cropRadio.SetSelected("Best")
+	}
 
 	embedRawCheck := widget.NewCheck("Embed original RAW file", func(checked bool) {
 		opts.EmbedRaw = checked
+		settings.EmbedRaw = checked
 	})
-	embedRawCheck.SetChecked(true)
+	embedRawCheck.SetChecked(opts.EmbedRaw)
 
 	previewCheck := widget.NewCheck("Include preview image", func(checked bool) {
 		opts.Preview = checked
+		settings.Preview = checked
 	})
-	previewCheck.SetChecked(true)
+	previewCheck.SetChecked(opts.Preview)
 
 	thumbnailCheck := widget.NewCheck("Include thumbnail", func(checked bool) {
 		opts.Thumbnail = checked
+		settings.Thumbnail = checked
 	})
-	thumbnailCheck.SetChecked(true)
+	thumbnailCheck.SetChecked(opts.Thumbnail)
 
 	section3 := container.NewVBox(
 		sec3Label,
@@ -166,8 +259,10 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	)
 
 	artistEntry := widget.NewEntry()
+	artistEntry.SetText(opts.Artist)
 	artistEntry.OnChanged = func(s string) {
 		opts.Artist = s
+		settings.Artist = s
 	}
 
 	section4 := container.NewVBox(
@@ -179,7 +274,13 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	// ── Bottom button bar ────────────────────────────────────────────────────
 
 	aboutBtn := widget.NewButton("About", func() {
-		dialog.ShowInformation("About", "DNGLab GUI v0.1.0", w)
+		dl := converter.DNGLab{}
+		_ = dl.DetectBinary()
+		ver, err := dl.Version()
+		if err != nil {
+			ver = "not detected"
+		}
+		ShowAboutDialog(w, ver)
 	})
 
 	quitBtn := widget.NewButton("Quit", func() {
@@ -206,6 +307,11 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	)
 
 	w.SetContent(content)
+
+	// Save settings when the window closes.
+	w.SetOnClosed(func() {
+		config.Save(a.Preferences(), settings)
+	})
 
 	return w
 }
