@@ -18,7 +18,7 @@ type ProgressDialog struct {
 	cancelled bool
 
 	fileLabel   *widget.Label
-	progressBar *widget.ProgressBar
+	progressBar *widget.ProgressBarInfinite
 	logEntry    *widget.Entry
 }
 
@@ -33,9 +33,7 @@ func NewProgressDialog(a fyne.App, parent fyne.Window) *ProgressDialog {
 
 	pd.fileLabel = widget.NewLabel("Starting...")
 
-	pd.progressBar = widget.NewProgressBar()
-	pd.progressBar.Min = 0
-	pd.progressBar.Max = 1
+	pd.progressBar = widget.NewProgressBarInfinite()
 
 	pd.logEntry = widget.NewMultiLineEntry()
 	pd.logEntry.SetPlaceHolder("")
@@ -71,6 +69,7 @@ func (pd *ProgressDialog) SetCancelFunc(cancel context.CancelFunc) {
 
 // Show displays the progress window.
 func (pd *ProgressDialog) Show() {
+	pd.progressBar.Start()
 	pd.win.Show()
 }
 
@@ -78,13 +77,10 @@ func (pd *ProgressDialog) Show() {
 //
 // Note: fyne.Do (for explicit main-thread dispatch) is available only from
 // Fyne v2.6.0. This project targets Fyne v2.4.0 where widget setter methods
-// (SetValue, SetText) use internal property locks and are safe to call from a
-// goroutine. When upgrading to Fyne v2.6+, wrap these calls in fyne.Do.
+// (SetText) use internal property locks and are safe to call from a goroutine.
+// When upgrading to Fyne v2.6+, wrap these calls in fyne.Do.
 func (pd *ProgressDialog) Update(file string, current, total int, logLine string) {
-	if total > 0 {
-		pd.progressBar.SetValue(float64(current) / float64(total))
-	}
-	pd.fileLabel.SetText(fmt.Sprintf("[%d/%d] %s", current, total, file))
+	pd.fileLabel.SetText(fmt.Sprintf("Converting %d files...", total))
 
 	if logLine != "" {
 		existing := pd.logEntry.Text
@@ -97,9 +93,14 @@ func (pd *ProgressDialog) Update(file string, current, total int, logLine string
 
 // Complete closes the progress window and shows a result dialog on the parent window.
 //
-// Note: see Update for the Fyne v2.4.0 goroutine-safety note. When upgrading
-// to Fyne v2.6+, wrap the body in fyne.Do.
+// Note: see Update for the Fyne v2.4.0 goroutine-safety note. This method also
+// calls pd.win.Hide(), dialog.ShowInformation, and dialog.ShowError from the
+// same goroutine. Whether Fyne v2.4.0 marshals window hide and dialog
+// construction to the main thread internally is not explicitly guaranteed by
+// the Fyne v2.4 API. When upgrading to Fyne v2.6+, wrap the entire body in
+// fyne.Do to ensure all Fyne state changes happen on the main thread.
 func (pd *ProgressDialog) Complete(err error) {
+	pd.progressBar.Stop()
 	pd.win.Hide()
 	if pd.cancelled {
 		dialog.ShowInformation("Conversion cancelled", "The conversion was cancelled.", pd.parent)
