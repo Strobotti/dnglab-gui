@@ -75,6 +75,11 @@ func (pd *ProgressDialog) Show() {
 }
 
 // Update refreshes the progress display. Safe to call from any goroutine.
+//
+// Note: fyne.Do (for explicit main-thread dispatch) is available only from
+// Fyne v2.6.0. This project targets Fyne v2.4.0 where widget setter methods
+// (SetValue, SetText) use internal property locks and are safe to call from a
+// goroutine. When upgrading to Fyne v2.6+, wrap these calls in fyne.Do.
 func (pd *ProgressDialog) Update(file string, current, total int, logLine string) {
 	if total > 0 {
 		pd.progressBar.SetValue(float64(current) / float64(total))
@@ -91,6 +96,9 @@ func (pd *ProgressDialog) Update(file string, current, total int, logLine string
 }
 
 // Complete closes the progress window and shows a result dialog on the parent window.
+//
+// Note: see Update for the Fyne v2.4.0 goroutine-safety note. When upgrading
+// to Fyne v2.6+, wrap the body in fyne.Do.
 func (pd *ProgressDialog) Complete(err error) {
 	pd.win.Hide()
 	if pd.cancelled {

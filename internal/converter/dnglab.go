@@ -56,51 +56,50 @@ func (d *DNGLab) Version() (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-// Convert converts all RAW files found under opts.InputPath to DNG format.
-// progress is called before each file with the file path, 1-based index, and total count.
-// All errors are collected and returned as a single combined error.
+// Convert converts all RAW files under opts.InputPath to DNG format by
+// invoking dnglab with the input directory directly. This lets dnglab use its
+// own parallelism and avoids per-file process-spawn overhead.
+//
+// progress is called once with file="" and current=0 when the run starts, so
+// the UI can show an indeterminate state. The total reported is the number of
+// RAW files found by the pre-scan (used only for the UI count display).
+// Context cancellation is propagated directly into the subprocess.
 func (d *DNGLab) Convert(ctx context.Context, opts ConvertOptions, progress func(file string, current, total int)) error {
 	if d.BinaryPath == "" {
 		return fmt.Errorf("dnglab binary path is not set; call DetectBinary first")
 	}
 
+	// Pre-scan so the UI can show a meaningful file count.
 	files, err := ScanForRawFiles(opts.InputPath, opts.Recursive)
 	if err != nil {
 		return fmt.Errorf("scanning for RAW files: %w", err)
 	}
 
 	total := len(files)
-	var errs []string
+	if progress != nil {
+		progress("", 0, total)
+	}
 
-	for i, file := range files {
+	// Build argument list: flags first, then the input directory (and optional
+	// output directory). dnglab processes the whole directory in one shot,
+	// which preserves its internal parallelism.
+	args := []string{"convert"}
+	args = append(args, opts.ToArgs()...)
+	args = append(args, opts.InputPath)
+	if opts.OutputPath != "" {
+		args = append(args, opts.OutputPath)
+	}
+
+	var out bytes.Buffer
+	cmd := exec.CommandContext(ctx, d.BinaryPath, args...) //nolint:gosec
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	if runErr := cmd.Run(); runErr != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-
-		if progress != nil {
-			progress(file, i+1, total)
-		}
-
-		// Build argument list: flags first, then positional args
-		args := []string{"convert"}
-		args = append(args, opts.ToArgs()...)
-		args = append(args, file)
-		if opts.OutputPath != "" {
-			args = append(args, opts.OutputPath)
-		}
-
-		var out bytes.Buffer
-		cmd := exec.CommandContext(ctx, d.BinaryPath, args...) //nolint:gosec
-		cmd.Stdout = &out
-		cmd.Stderr = &out
-
-		if runErr := cmd.Run(); runErr != nil {
-			errs = append(errs, fmt.Sprintf("converting %s: %v (output: %s)", file, runErr, strings.TrimSpace(out.String())))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("%d file(s) failed to convert:\n%s", len(errs), strings.Join(errs, "\n"))
+		return fmt.Errorf("dnglab convert failed: %v\noutput:\n%s", runErr, strings.TrimSpace(out.String()))
 	}
 
 	return nil

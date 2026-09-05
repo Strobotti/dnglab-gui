@@ -79,13 +79,22 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		// 4. Disable Convert button during conversion.
 		convertBtn.Disable()
 
-		// 5. Run conversion in a goroutine.
+		// 5. Save settings before launching so an abrupt exit does not lose them.
+		config.Save(a.Preferences(), settings)
+
+		// 6. Run conversion in a goroutine.
 		go func() {
 			convErr := dl.Convert(ctx, opts, func(file string, current, total int) {
-				pd.Update(file, current, total, fmt.Sprintf("[%d/%d] %s", current, total, filepath.Base(file)))
+				logLine := ""
+				if file != "" {
+					logLine = fmt.Sprintf("[%d/%d] %s", current, total, filepath.Base(file))
+				}
+				pd.Update(file, current, total, logLine)
 			})
 			cancel()
 			pd.Complete(convErr)
+			// Note: widget.Enable is safe to call from a goroutine in Fyne v2.4.0
+			// (uses internal property locks). Wrap in fyne.Do when upgrading to v2.6+.
 			convertBtn.Enable()
 		}()
 	})
@@ -199,6 +208,10 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		compressionRadio.SetSelected("Lossless")
 	}
 
+	// cropMap translates UI display strings to dnglab --crop flag values.
+	// The dnglab CLI accepts "best", "activearea" (no hyphen), and "none" --
+	// this has been verified against the official dnglab documentation at
+	// https://github.com/dnglab/dnglab (possible values: best, activearea, none).
 	cropMap := map[string]string{
 		"Best":        "best",
 		"Active Area": "activearea",
