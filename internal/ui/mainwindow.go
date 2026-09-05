@@ -255,10 +255,8 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	section3 := container.NewVBox(
 		sec3Label,
-		widget.NewLabel("Compression:"),
-		compressionRadio,
-		widget.NewLabel("Crop:"),
-		cropRadio,
+		container.NewHBox(widget.NewLabel("Compression:"), compressionRadio),
+		container.NewHBox(widget.NewLabel("Crop:"), cropRadio),
 		embedRawCheck,
 		previewCheck,
 		thumbnailCheck,
