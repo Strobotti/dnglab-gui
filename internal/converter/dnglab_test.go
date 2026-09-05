@@ -62,7 +62,7 @@ func TestConvertSuccess(t *testing.T) {
 	opts := DefaultConvertOptions()
 	opts.InputPath = inputDir
 
-	err := d.Convert(context.Background(), opts, nil)
+	err := d.Convert(context.Background(), opts, 1, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestConvertFailure(t *testing.T) {
 	opts := DefaultConvertOptions()
 	opts.InputPath = inputDir
 
-	err := d.Convert(context.Background(), opts, nil)
+	err := d.Convert(context.Background(), opts, 1, nil)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -107,7 +107,7 @@ func TestConvertArgs(t *testing.T) {
 	opts.SkipExisting = true // means -f is omitted
 
 	var captured string
-	err := d.Convert(context.Background(), opts, func(file string, current, total int) {
+	err := d.Convert(context.Background(), opts, 1, func(file string, current, total int) {
 		// first (and only) progress callback: file should be empty string
 		captured = file
 	})
@@ -151,7 +151,7 @@ func TestConvertOutputPath(t *testing.T) {
 	opts.InputPath = inputDir
 	opts.OutputPath = outputDir
 
-	if err := d.Convert(context.Background(), opts, nil); err != nil {
+	if err := d.Convert(context.Background(), opts, 1, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

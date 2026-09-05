@@ -60,24 +60,17 @@ func (d *DNGLab) Version() (string, error) {
 // invoking dnglab with the input directory directly. This lets dnglab use its
 // own parallelism and avoids per-file process-spawn overhead.
 //
-// progress is called once with file="" and current=0 when the run starts, so
-// the UI can show an indeterminate state. The total reported is the number of
-// RAW files found by the pre-scan (used only for the UI count display).
+// totalFiles is the number of RAW files the caller already scanned (passed
+// through to the progress callback so the UI can show a meaningful count).
+// The caller is responsible for scanning upfront; Convert does not scan again.
 // Context cancellation is propagated directly into the subprocess.
-func (d *DNGLab) Convert(ctx context.Context, opts ConvertOptions, progress func(file string, current, total int)) error {
+func (d *DNGLab) Convert(ctx context.Context, opts ConvertOptions, totalFiles int, progress func(file string, current, total int)) error {
 	if d.BinaryPath == "" {
 		return fmt.Errorf("dnglab binary path is not set; call DetectBinary first")
 	}
 
-	// Pre-scan so the UI can show a meaningful file count.
-	files, err := ScanForRawFiles(opts.InputPath, opts.Recursive)
-	if err != nil {
-		return fmt.Errorf("scanning for RAW files: %w", err)
-	}
-
-	total := len(files)
 	if progress != nil {
-		progress("", 0, total)
+		progress("", 0, totalFiles)
 	}
 
 	// Build argument list: flags first, then the input directory (and optional

@@ -31,6 +31,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	opts.Preview = settings.Preview
 	opts.Thumbnail = settings.Thumbnail
 	opts.SkipExisting = settings.SkipExisting
+	opts.Recursive = settings.Recursive
 	opts.Artist = settings.Artist
 	opts.InputPath = settings.LastInputDir
 	opts.OutputPath = settings.LastOutputDir
@@ -84,7 +85,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 		// 6. Run conversion in a goroutine.
 		go func() {
-			convErr := dl.Convert(ctx, opts, func(file string, current, total int) {
+			convErr := dl.Convert(ctx, opts, len(files), func(file string, current, total int) {
 				logLine := ""
 				if file != "" {
 					logLine = fmt.Sprintf("[%d/%d] %s", current, total, filepath.Base(file))
@@ -118,8 +119,9 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	recursiveCheck := widget.NewCheck("Include images in subfolders", func(checked bool) {
 		opts.Recursive = checked
+		settings.Recursive = checked
 	})
-	recursiveCheck.SetChecked(opts.Recursive)
+	recursiveCheck.SetChecked(settings.Recursive)
 
 	skipCheck := widget.NewCheck("Skip source image if destination image already exists", func(checked bool) {
 		opts.SkipExisting = checked

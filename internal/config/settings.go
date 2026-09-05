@@ -3,16 +3,17 @@ package config
 import "fyne.io/fyne/v2"
 
 const (
-	keyCompression  = "compression"
-	keyCrop         = "crop"
-	keyEmbedRaw     = "embed_raw"
-	keyPreview      = "preview"
-	keyThumbnail    = "thumbnail"
-	keySkipExisting = "skip_existing"
-	keyArtist       = "artist"
-	keyLastInputDir = "last_input_dir"
+	keyCompression   = "compression"
+	keyCrop          = "crop"
+	keyEmbedRaw      = "embed_raw"
+	keyPreview       = "preview"
+	keyThumbnail     = "thumbnail"
+	keySkipExisting  = "skip_existing"
+	keyArtist        = "artist"
+	keyLastInputDir  = "last_input_dir"
 	keyLastOutputDir = "last_output_dir"
-	keyOutputMode   = "output_mode"
+	keyOutputMode    = "output_mode"
+	keyRecursive     = "recursive"
 )
 
 // Settings holds all persisted user preferences.
@@ -23,6 +24,7 @@ type Settings struct {
 	Preview       bool
 	Thumbnail     bool
 	SkipExisting  bool
+	Recursive     bool
 	Artist        string
 	LastInputDir  string
 	LastOutputDir string
@@ -52,6 +54,7 @@ func Load(prefs fyne.Preferences) Settings {
 		Preview:       prefs.BoolWithFallback(keyPreview, d.Preview),
 		Thumbnail:     prefs.BoolWithFallback(keyThumbnail, d.Thumbnail),
 		SkipExisting:  prefs.BoolWithFallback(keySkipExisting, d.SkipExisting),
+		Recursive:     prefs.BoolWithFallback(keyRecursive, d.Recursive),
 		Artist:        prefs.StringWithFallback(keyArtist, d.Artist),
 		LastInputDir:  prefs.StringWithFallback(keyLastInputDir, d.LastInputDir),
 		LastOutputDir: prefs.StringWithFallback(keyLastOutputDir, d.LastOutputDir),
@@ -67,6 +70,7 @@ func Save(prefs fyne.Preferences, s Settings) {
 	prefs.SetBool(keyPreview, s.Preview)
 	prefs.SetBool(keyThumbnail, s.Thumbnail)
 	prefs.SetBool(keySkipExisting, s.SkipExisting)
+	prefs.SetBool(keyRecursive, s.Recursive)
 	prefs.SetString(keyArtist, s.Artist)
 	prefs.SetString(keyLastInputDir, s.LastInputDir)
 	prefs.SetString(keyLastOutputDir, s.LastOutputDir)
