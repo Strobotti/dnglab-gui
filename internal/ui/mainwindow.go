@@ -185,7 +185,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	section2 := container.NewVBox(
 		sec2Label,
-		container.NewHBox(locationSelect, outputFolderBtn),
+		container.NewBorder(nil, nil, nil, outputFolderBtn, locationSelect),
 		outputPathLabel,
 		widget.NewSeparator(),
 	)
