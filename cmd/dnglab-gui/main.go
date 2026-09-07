@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	a := app.New()
+	a := app.NewWithID("com.github.strobotti.dnglab-gui")
 	w := ui.NewMainWindow(a)
 	w.ShowAndRun()
 }
