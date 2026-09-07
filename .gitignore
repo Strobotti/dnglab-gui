@@ -1,0 +1,16 @@
+# Build output
+bin/
+dnglab-gui
+
+# IDE
+.idea/
+
+# Agent directories
+.agents/
+.agentbridge/
+
+# macOS
+.DS_Store
+
+# Documentation drafts (not for version control)
+docs/plan.md
