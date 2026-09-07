@@ -39,7 +39,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	// ── Section 1: Select images to convert ─────────────────────────────────
 
 	sec1Label := widget.NewLabelWithStyle(
-		"1  Select images to convert",
+		"1. Select images to convert",
 		fyne.TextAlignLeading,
 		fyne.TextStyle{Bold: true},
 	)
@@ -139,7 +139,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	// ── Section 2: Select location to save converted images ──────────────────
 
 	sec2Label := widget.NewLabelWithStyle(
-		"2  Select location to save converted images",
+		"2. Select location to save converted images",
 		fyne.TextAlignLeading,
 		fyne.TextStyle{Bold: true},
 	)
@@ -185,15 +185,15 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	section2 := container.NewVBox(
 		sec2Label,
-		locationSelect,
-		container.NewHBox(outputFolderBtn, outputPathLabel),
+		container.NewHBox(locationSelect, outputFolderBtn),
+		outputPathLabel,
 		widget.NewSeparator(),
 	)
 
 	// ── Section 3: Conversion Options ───────────────────────────────────────
 
 	sec3Label := widget.NewLabelWithStyle(
-		"3  Conversion Options",
+		"3. Conversion Options",
 		fyne.TextAlignLeading,
 		fyne.TextStyle{Bold: true},
 	)
@@ -266,7 +266,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	// ── Section 4: Metadata ──────────────────────────────────────────────────
 
 	sec4Label := widget.NewLabelWithStyle(
-		"4  Metadata",
+		"4. Metadata",
 		fyne.TextAlignLeading,
 		fyne.TextStyle{Bold: true},
 	)
@@ -280,7 +280,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 	section4 := container.NewVBox(
 		sec4Label,
-		container.NewHBox(widget.NewLabel("Artist:"), artistEntry),
+		container.NewBorder(nil, nil, widget.NewLabel("Artist:"), nil, artistEntry),
 		widget.NewSeparator(),
 	)
 
