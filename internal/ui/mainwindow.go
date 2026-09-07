@@ -18,7 +18,7 @@ import (
 // NewMainWindow creates and returns the application's main window.
 func NewMainWindow(a fyne.App) fyne.Window {
 	w := a.NewWindow("DNGLab GUI")
-	w.Resize(fyne.NewSize(640, 560))
+	w.Resize(fyne.NewSize(640, 780))
 
 	// Load persisted settings.
 	settings := config.Load(a.Preferences())
