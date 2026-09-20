@@ -6,7 +6,7 @@ A graphical user interface for dnglab — converts camera RAW files to Adobe DNG
 
 ## Prerequisites
 
-- **Go 1.21 or later** — [https://go.dev/dl/](https://go.dev/dl/)
+- **Go 1.27.1 or later** — [https://go.dev/dl/](https://go.dev/dl/)
 - **C compiler** — required by the [Fyne](https://fyne.io/) UI toolkit:
   - Linux: `gcc` (e.g. `sudo apt install gcc` on Debian/Ubuntu)
   - macOS: Xcode Command Line Tools (`xcode-select --install`)
