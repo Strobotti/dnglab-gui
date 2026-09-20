@@ -1,6 +1,5 @@
 # Build output
 bin/
-dnglab-gui
 
 # IDE
 .idea/
