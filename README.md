@@ -61,13 +61,13 @@ Choose where the DNG files are written. By default the converted files are saved
 
 ### 3 Conversion Options
 
-| Option | Values |
-|---|---|
+| Option      | Values                           |
+|-------------|----------------------------------|
 | Compression | Lossless (default), Uncompressed |
-| Crop mode | Best crop, Active area, None |
-| Embed RAW | On / Off |
-| Preview | On / Off |
-| Thumbnail | On / Off |
+| Crop mode   | Best crop, Active area, None     |
+| Embed RAW   | On / Off                         |
+| Preview     | On / Off                         |
+| Thumbnail   | On / Off                         |
 
 ### 4 Metadata
 
@@ -75,16 +75,16 @@ Choose where the DNG files are written. By default the converted files are saved
 
 ## Supported RAW Formats
 
-| Manufacturer | Extensions |
-|---|---|
-| Canon | CR3, CR2, CRW |
-| Nikon | NEF, NRW |
-| Sony | ARW, SRF, SR2 |
-| Fujifilm | RAF |
-| Panasonic / Leica | RW2 |
-| Olympus | ORF |
-| Pentax / Ricoh | PEF |
-| Others | 3FR, ARI, ERF, KDC, DCS, DCR, IIQ, MOS, MEF, MRW, SRW |
+| Manufacturer      | Extensions                                            |
+|-------------------|-------------------------------------------------------|
+| Canon             | CR3, CR2, CRW                                         |
+| Nikon             | NEF, NRW                                              |
+| Sony              | ARW, SRF, SR2                                         |
+| Fujifilm          | RAF                                                   |
+| Panasonic / Leica | RW2                                                   |
+| Olympus           | ORF                                                   |
+| Pentax / Ricoh    | PEF                                                   |
+| Others            | 3FR, ARI, ERF, KDC, DCS, DCR, IIQ, MOS, MEF, MRW, SRW |
 
 The actual list of supported formats depends on the version of `dnglab` installed on your system.
 
@@ -92,13 +92,13 @@ The actual list of supported formats depends on the version of `dnglab` installe
 
 Contributions are welcome! This project uses [Conventional Commits](https://www.conventionalcommits.org/) to automate versioning and changelog generation. Please format your commit messages as follows:
 
-| Prefix | Purpose | Version bump |
-|--------|---------|--------------|
-| `feat:` | New feature | Minor |
-| `fix:` | Bug fix | Patch |
-| `docs:` | Documentation only | Patch |
-| `chore:` | Maintenance (no release) | None |
-| `refactor:` | Code refactoring | Patch |
+| Prefix      | Purpose                  | Version bump |
+|-------------|--------------------------|--------------|
+| `feat:`     | New feature              | Minor        |
+| `fix:`      | Bug fix                  | Patch        |
+| `docs:`     | Documentation only       | Patch        |
+| `chore:`    | Maintenance (no release) | None         |
+| `refactor:` | Code refactoring         | Patch        |
 
 Examples:
 - `feat: add batch processing support`
