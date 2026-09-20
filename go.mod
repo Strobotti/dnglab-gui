@@ -1,6 +1,6 @@
 module github.com/strobotti/dnglab-gui
 
-go 1.21
+go 1.27.1
 
 require fyne.io/fyne/v2 v2.4.0
 

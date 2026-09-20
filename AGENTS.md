@@ -79,7 +79,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ## Environment Requirements
 
-- Go 1.21+
+- Go 1.27.1+
 - CGO enabled (default)
 - C compiler:
     - Linux: `gcc` + `libgl1-mesa-dev xorg-dev`
