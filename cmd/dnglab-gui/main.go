@@ -10,5 +10,6 @@ func main() {
 	a := app.NewWithID("com.github.strobotti.dnglab-gui")
 	a.SetIcon(assets.AppIcon())
 	w := ui.NewMainWindow(a)
+	ui.CheckDNGLabOnStart(a, w)
 	w.ShowAndRun()
 }
