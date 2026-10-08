@@ -62,7 +62,7 @@ func TestConvertSuccess(t *testing.T) {
 	opts := DefaultConvertOptions()
 	opts.InputPath = inputDir
 
-	err := d.Convert(context.Background(), opts, 1, nil)
+	_, err := d.Convert(context.Background(), opts, 1, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestConvertFailure(t *testing.T) {
 	opts := DefaultConvertOptions()
 	opts.InputPath = inputDir
 
-	err := d.Convert(context.Background(), opts, 1, nil)
+	_, err := d.Convert(context.Background(), opts, 1, nil)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -106,17 +106,13 @@ func TestConvertArgs(t *testing.T) {
 	opts.Recursive = false
 	opts.SkipExisting = true // means -f is omitted
 
-	var captured string
-	err := d.Convert(context.Background(), opts, 1, func(file string, current, total int) {
-		// first (and only) progress callback: file should be empty string
-		captured = file
-	})
+	res, err := d.Convert(context.Background(), opts, 1, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// The progress callback should be called with file="" at start.
-	if captured != "" {
-		t.Errorf("expected progress callback file to be empty string, got %q", captured)
+	// The stub prints no status lines, so nothing should be reported as converted.
+	if res.Converted != 0 {
+		t.Errorf("expected 0 converted files from stub, got %d", res.Converted)
 	}
 
 	// Run the stub directly to capture the args it would receive.
@@ -151,7 +147,7 @@ func TestConvertOutputPath(t *testing.T) {
 	opts.InputPath = inputDir
 	opts.OutputPath = outputDir
 
-	if err := d.Convert(context.Background(), opts, 1, nil); err != nil {
+	if _, err := d.Convert(context.Background(), opts, 1, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

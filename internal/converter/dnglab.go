@@ -1,13 +1,17 @@
 package converter
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // DNGLab wraps the dnglab CLI binary.
@@ -56,44 +60,142 @@ func (d *DNGLab) Version() (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
+// Result summarizes a conversion run.
+type Result struct {
+	Converted int
+	Skipped   int          // destination already existed and was not overwritten
+	Failed    []FailedFile // files dnglab could not convert
+}
+
+// FailedFile describes one file that could not be converted.
+type FailedFile struct {
+	Path   string
+	Reason string
+}
+
 // Convert converts all RAW files under opts.InputPath to DNG format by
-// invoking dnglab with the input directory directly. This lets dnglab use its
-// own parallelism and avoids per-file process-spawn overhead.
+// invoking dnglab with the input directory directly, which keeps dnglab's own
+// parallelism. The output of "dnglab -v" is parsed live and reported through
+// progress. totalFiles is the number of RAW files the caller already scanned.
 //
-// totalFiles is the number of RAW files the caller already scanned (passed
-// through to the progress callback so the UI can show a meaningful count).
-// The caller is responsible for scanning upfront; Convert does not scan again.
-// Context cancellation is propagated directly into the subprocess.
-func (d *DNGLab) Convert(ctx context.Context, opts ConvertOptions, totalFiles int, progress func(file string, current, total int)) error {
+// A non-zero exit status from dnglab is not an error when it converted,
+// skipped or failed individual files; dnglab reports partial failures that way.
+// Result.Failed carries those files. An error is returned only when dnglab
+// cannot run, the run was cancelled, or it failed without processing any file.
+func (d *DNGLab) Convert(ctx context.Context, opts ConvertOptions, totalFiles int, progress func(Event)) (Result, error) {
+	var res Result
 	if d.BinaryPath == "" {
-		return fmt.Errorf("dnglab binary path is not set; call DetectBinary first")
+		return res, fmt.Errorf("dnglab binary path is not set; call DetectBinary first")
 	}
 
-	if progress != nil {
-		progress("", 0, totalFiles)
-	}
-
-	// Build argument list: flags first, then the input directory (and optional
-	// output directory). dnglab processes the whole directory in one shot,
-	// which preserves its internal parallelism.
-	args := []string{"convert"}
+	args := []string{"convert", "-v"}
 	args = append(args, opts.ToArgs()...)
 	args = append(args, opts.InputPath)
 	if opts.OutputPath != "" {
 		args = append(args, opts.OutputPath)
 	}
 
-	var out bytes.Buffer
+	pr, pw := io.Pipe()
 	cmd := exec.CommandContext(ctx, d.BinaryPath, args...) //nolint:gosec
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
-	if runErr := cmd.Run(); runErr != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
+	var (
+		mu  sync.Mutex
+		out strings.Builder
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sc := bufio.NewScanner(pr)
+		sc.Buffer(make([]byte, 64*1024), 1024*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			mu.Lock()
+			out.WriteString(line + "\n")
+			mu.Unlock()
+
+			ev := parseLine(line)
+			switch {
+			case ev.Converted:
+				res.Converted++
+			case ev.Skipped:
+				res.Skipped++
+			case ev.Failed:
+				res.Failed = append(res.Failed, FailedFile{Path: ev.Source, Reason: ev.Line})
+			}
+			if progress != nil {
+				progress(ev)
+			}
 		}
-		return fmt.Errorf("dnglab convert failed: %v\noutput:\n%s", runErr, strings.TrimSpace(out.String()))
+		_, _ = io.Copy(io.Discard, pr)
+	}()
+
+	runErr := cmd.Run()
+	_ = pw.Close()
+	<-done
+
+	if ctx.Err() != nil {
+		return res, ctx.Err()
+	}
+	if runErr != nil {
+		processed := res.Converted + res.Skipped + len(res.Failed)
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) && processed > 0 {
+			return res, nil
+		}
+		mu.Lock()
+		output := strings.TrimSpace(out.String())
+		mu.Unlock()
+		return res, fmt.Errorf("dnglab convert failed: %v\noutput:\n%s", runErr, output)
 	}
 
-	return nil
+	return res, nil
+}
+
+// Event is one parsed line of dnglab's verbose output.
+type Event struct {
+	Line      string // raw output line
+	Source    string // source file path, for converted, skipped and failed files
+	Converted bool   // dnglab reported a successfully converted file
+	Skipped   bool   // destination already exists and the file was not overwritten
+	Failed    bool   // dnglab could not convert the file
+}
+
+// parseLine classifies a line of dnglab's -v output. Known per-file formats:
+//
+//	Status: Converted '/path/in.ARW' => '/path/out.dng' (in 0.93s)
+//	Status: Failed: '/path/in.ARW', Already exists: /path/out.dng
+//
+// Other lines (summaries, "Error: ..." repeats) are only logged, not counted.
+func parseLine(line string) Event {
+	ev := Event{Line: line}
+	switch {
+	case strings.HasPrefix(line, "Status: Converted"):
+		ev.Converted = true
+		ev.Source = quotedValue(line)
+	case strings.HasPrefix(line, "Status: Failed") && strings.Contains(line, "Already exists"):
+		ev.Skipped = true
+		ev.Source = quotedValue(line)
+	case strings.HasPrefix(line, "Status: Failed"):
+		ev.Failed = true
+		ev.Source = quotedValue(line)
+	}
+	return ev
+}
+
+// quotedValue returns the text between the first pair of single quotes in s.
+func quotedValue(s string) string {
+	i := strings.Index(s, "'")
+	if i < 0 {
+		return ""
+	}
+	rest := s[i+1:]
+	if j := strings.Index(rest, "'"); j >= 0 {
+		return rest[:j]
+	}
+	return ""
 }
