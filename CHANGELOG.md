@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/Strobotti/dnglab-gui/compare/v1.0.0...v1.1.0) (2026-10-08)
+
+
+### Features
+
+* native folder picker, Adobe-style progress and result dialogs ([d4319fd](https://github.com/Strobotti/dnglab-gui/commit/d4319fd4a01682f08de8f1a9391a1049b22d906c))
+* native folder picker, Adobe-style progress and result dialogs ([d4319fd](https://github.com/Strobotti/dnglab-gui/commit/d4319fd4a01682f08de8f1a9391a1049b22d906c))
+* native folder picker, Adobe-style progress and result dialogs ([ff45eb8](https://github.com/Strobotti/dnglab-gui/commit/ff45eb8a1ac8fda0b351d17004fedfa781add742))
+
 ## 1.0.0 (2026-09-20)
 
 
