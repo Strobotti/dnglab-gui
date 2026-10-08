@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/Strobotti/dnglab-gui/compare/v1.1.0...v1.2.0) (2026-10-08)
+
+
+### Features
+
+* prompt to download dnglab when the binary is missing ([7238566](https://github.com/Strobotti/dnglab-gui/commit/7238566dadcb43e1c267292cc6d66a40a444820f))
+* prompt to download dnglab when the binary is missing ([71fc594](https://github.com/Strobotti/dnglab-gui/commit/71fc594c901701983e95c5c50510b7628da67487))
+
 ## [1.1.0](https://github.com/Strobotti/dnglab-gui/compare/v1.0.0...v1.1.0) (2026-10-08)
 
 
