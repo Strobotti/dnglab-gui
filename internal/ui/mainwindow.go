@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"os/exec"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -14,6 +14,39 @@ import (
 	"github.com/strobotti/dnglab-gui/internal/config"
 	"github.com/strobotti/dnglab-gui/internal/converter"
 )
+
+// browseFolder opens the desktop's native folder picker so it can be resized
+// and moved, and shows removable media. On Linux this uses zenity (GTK file
+// chooser). If zenity is not installed it falls back to the Fyne folder dialog.
+// The native picker blocks, so it runs in a goroutine; onPick runs on the UI thread.
+func browseFolder(w fyne.Window, title, startDir string, onPick func(path string)) {
+	if _, err := exec.LookPath("zenity"); err != nil {
+		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err != nil || uri == nil {
+				return
+			}
+			onPick(uri.Path())
+		}, w)
+		return
+	}
+
+	go func() {
+		args := []string{"--file-selection", "--directory", "--title=" + title}
+		if startDir != "" {
+			args = append(args, "--filename="+strings.TrimRight(startDir, "/")+"/")
+		}
+		out, err := exec.Command("zenity", args...).Output()
+		if err != nil {
+			// zenity exits non-zero when the user cancels.
+			return
+		}
+		path := strings.TrimSpace(string(out))
+		if path == "" {
+			return
+		}
+		fyne.Do(func() { onPick(path) })
+	}()
+}
 
 // NewMainWindow creates and returns the application's main window.
 func NewMainWindow(a fyne.App) fyne.Window {
@@ -51,7 +84,21 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	inputPathLabel := widget.NewLabel(inputPathText)
 
 	// Convert button declared early so the folder selector can enable it.
+	// Convert is enabled only when an input folder is selected and the settings
+	// differ from those of the last successful conversion.
+	var lastRunKey string
 	var convertBtn *widget.Button
+	updateConvertButton := func() {
+		if convertBtn == nil {
+			return
+		}
+		key := fmt.Sprintf("%+v", opts)
+		if opts.InputPath != "" && (lastRunKey == "" || key != lastRunKey) {
+			convertBtn.Enable()
+		} else {
+			convertBtn.Disable()
+		}
+	}
 	convertBtn = widget.NewButton("Convert", func() {
 		// 1. Detect dnglab binary.
 		dl := converter.DNGLab{}
@@ -73,7 +120,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 
 		// 3. Show progress dialog.
 		ctx, cancel := context.WithCancel(context.Background())
-		pd := NewProgressDialog(a, w)
+		pd := NewProgressDialog(a, w, len(files))
 		pd.SetCancelFunc(cancel)
 		pd.Show()
 
@@ -83,48 +130,41 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		// 5. Save settings before launching so an abrupt exit does not lose them.
 		config.Save(a.Preferences(), settings)
 
-		// 6. Run conversion in a goroutine.
+		// 6. Run conversion in a goroutine; dnglab's output drives the progress dialog.
+		runKey := fmt.Sprintf("%+v", opts)
 		go func() {
-			convErr := dl.Convert(ctx, opts, len(files), func(file string, current, total int) {
-				logLine := ""
-				if file != "" {
-					logLine = fmt.Sprintf("[%d/%d] %s", current, total, filepath.Base(file))
-				}
-				pd.Update(file, current, total, logLine)
-			})
+			res, convErr := dl.Convert(ctx, opts, len(files), pd.HandleEvent)
 			cancel()
-			pd.Complete(convErr)
-			// Note: widget.Enable is safe to call from a goroutine in Fyne v2.4.0
-			// (uses internal property locks). Wrap in fyne.Do when upgrading to v2.6+.
-			convertBtn.Enable()
+			pd.Complete(res, convErr)
+			fyne.Do(func() {
+				if convErr == nil && len(res.Failed) == 0 && !pd.IsCancelled() {
+					lastRunKey = runKey
+				}
+				updateConvertButton()
+			})
 		}()
 	})
-	if opts.InputPath != "" {
-		convertBtn.Enable()
-	} else {
-		convertBtn.Disable()
-	}
+	updateConvertButton()
 
 	selectInputBtn := widget.NewButton("Select Folder...", func() {
-		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil || uri == nil {
-				return
-			}
-			opts.InputPath = uri.Path()
-			settings.LastInputDir = uri.Path()
-			inputPathLabel.SetText(uri.Path())
-			convertBtn.Enable()
-		}, w)
+		browseFolder(w, "Select source folder", settings.LastInputDir, func(path string) {
+			opts.InputPath = path
+			settings.LastInputDir = path
+			inputPathLabel.SetText(path)
+			updateConvertButton()
+		})
 	})
 
 	recursiveCheck := widget.NewCheck("Include images in subfolders", func(checked bool) {
 		opts.Recursive = checked
 		settings.Recursive = checked
+		updateConvertButton()
 	})
 	recursiveCheck.SetChecked(settings.Recursive)
 
 	skipCheck := widget.NewCheck("Skip source image if destination image already exists", func(checked bool) {
 		opts.SkipExisting = checked
+		updateConvertButton()
 	})
 	skipCheck.SetChecked(opts.SkipExisting)
 
@@ -147,14 +187,12 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	outputPathLabel := widget.NewLabel(opts.OutputPath)
 
 	outputFolderBtn := widget.NewButton("Select Folder...", func() {
-		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil || uri == nil {
-				return
-			}
-			opts.OutputPath = uri.Path()
-			settings.LastOutputDir = uri.Path()
-			outputPathLabel.SetText(uri.Path())
-		}, w)
+		browseFolder(w, "Select output folder", settings.LastOutputDir, func(path string) {
+			opts.OutputPath = path
+			settings.LastOutputDir = path
+			outputPathLabel.SetText(path)
+			updateConvertButton()
+		})
 	})
 
 	// Determine initial state of the output folder button.
@@ -179,6 +217,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 				outputFolderBtn.Enable()
 				settings.OutputMode = "folder"
 			}
+			updateConvertButton()
 		},
 	)
 	locationSelect.SetSelected(initialLocationSelection)
@@ -201,6 +240,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	compressionRadio := widget.NewRadioGroup([]string{"Lossless", "Uncompressed"}, func(s string) {
 		opts.Compression = strings.ToLower(s)
 		settings.Compression = opts.Compression
+		updateConvertButton()
 	})
 	// Restore saved compression selection.
 	switch opts.Compression {
@@ -223,6 +263,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 		if v, ok := cropMap[s]; ok {
 			opts.Crop = v
 			settings.Crop = v
+			updateConvertButton()
 		}
 	})
 	// Restore saved crop selection.
@@ -238,18 +279,21 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	embedRawCheck := widget.NewCheck("Embed original RAW file", func(checked bool) {
 		opts.EmbedRaw = checked
 		settings.EmbedRaw = checked
+		updateConvertButton()
 	})
 	embedRawCheck.SetChecked(opts.EmbedRaw)
 
 	previewCheck := widget.NewCheck("Include preview image", func(checked bool) {
 		opts.Preview = checked
 		settings.Preview = checked
+		updateConvertButton()
 	})
 	previewCheck.SetChecked(opts.Preview)
 
 	thumbnailCheck := widget.NewCheck("Include thumbnail", func(checked bool) {
 		opts.Thumbnail = checked
 		settings.Thumbnail = checked
+		updateConvertButton()
 	})
 	thumbnailCheck.SetChecked(opts.Thumbnail)
 
@@ -276,6 +320,7 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	artistEntry.OnChanged = func(s string) {
 		opts.Artist = s
 		settings.Artist = s
+		updateConvertButton()
 	}
 
 	section4 := container.NewVBox(
